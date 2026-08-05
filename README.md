@@ -25,12 +25,12 @@ is handled:
 UI  →  REST API  →  Agent (LLM + tools)  →  Redis
 ```
 
-Notice how little the application code changes at each step: the security moves
+Each branch will improve different security aspects with little code changes to the application: the security moves
 into the vault and the ACL, not into the app. The `.env` goes from holding
 literals to holding `op://` references, and that's most of it. Safer without
 slowing the developer down is the whole point.
 
-The data model evolves along with the security. Early branches store everything
+You will notice that the data model evolves along with the security. Early branches store everything
 in one `customer:NNNN` record, PII included, mirroring how teams actually start;
 branch 3 splits PII into its own key so a scoped identity can be denied it.
 
@@ -95,7 +95,8 @@ git checkout env-vars-as-source-truth
 ```
 
 Step 1 needs only **Docker**. Steps 2 through 4 add the **[1Password CLI][op-cli]**
-and a 1Password account (service accounts require a Business or Teams plan).
+and a 1Password account. Note that 1Password offers trial accounts for you to play
+with the product before committing with a credit card.
 
 [Ollama]: https://ollama.com
 [redis-mcp]: https://github.com/redis/mcp-redis
