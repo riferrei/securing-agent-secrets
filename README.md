@@ -25,6 +25,15 @@ is handled:
 UI  →  REST API  →  Agent (LLM + tools)  →  Redis
 ```
 
+Notice how little the application code changes at each step: the security moves
+into the vault and the ACL, not into the app. The `.env` goes from holding
+literals to holding `op://` references, and that's most of it. Safer without
+slowing the developer down is the whole point.
+
+The data model evolves along with the security. Early branches store everything
+in one `customer:NNNN` record, PII included, mirroring how teams actually start;
+branch 3 splits PII into its own key so a scoped identity can be denied it.
+
 The app runs locally with Docker and a local model via [Ollama], so the core
 walkthrough has no external LLM costs and nothing leaves your machine.
 
@@ -37,7 +46,9 @@ walkthrough has no external LLM costs and nothing leaves your machine.
 | 3 | [`controlling-blast-radius`][b3] | A read-only, PII-blind identity: even a hijacked agent can't read SSNs or write |
 | 4 | [`securing-mcp-servers`][b4] | Pointing an off-the-shelf MCP server at the same data, with 1Password securing *its* credential |
 
-Each branch's README goes deep. Here's the through-line.
+Each branch's README goes deep, and each closes with a candid *"What this
+doesn't solve"*, the residual weakness that motivates the next step, so the
+progression reads as intentional rather than as drift. Here's the through-line.
 
 ### 1 · The credential in an environment variable
 
