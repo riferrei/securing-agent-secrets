@@ -14,11 +14,6 @@ realistic app. Each step lives on its own branch and is a complete, runnable
 version of the app, safer than the one before. Read them in order to follow the
 reasoning, or check one out and run it yourself.
 
-> [!NOTE]
-> A secrets manager is necessary but not sufficient: it raises the floor, while
-> people, process, and culture set the ceiling. This repo is about raising the
-> floor as high as tooling allows.
-
 ## The example app
 
 A customer-support assistant. Ask it about a customer in natural language; it
@@ -50,15 +45,14 @@ The Redis credential lives in a `.env` file. This isn't a strawman; it's what
 most teams actually ship: the value is in an env var, `.env` is git-ignored, and
 everything works. It feels safe. It isn't: the credential is plaintext on disk,
 one stray `git add .` from landing in history, where a leaked secret is
-effectively public and rotation is the only real fix. **Next:** get it off disk.
+effectively public and rotation is the only real fix.
 
 ### 2 · A vault as the source of truth
 
 The credential moves into 1Password and is resolved just in time through the
 1Password SDK, authenticated as a service account. It never touches disk: there
 is nothing in `.env` to leak and nothing on the box to steal. It lives in memory
-only for the instant it's used. **Next:** the identity that fetches it is still
-over-privileged.
+only for the instant it's used.
 
 ### 3 · Controlling the blast radius
 
@@ -66,8 +60,7 @@ Shrink what the agent can *do*. The customer record splits into two keys,
 business fields and PII (email, phone, SSN, address), and the agent connects as a
 read-only Redis ACL user scoped to the business keys only. It cannot read PII and
 cannot write anything; Redis refuses, not the agent. Even a fully hijacked agent
-comes up empty on SSNs. **Next:** this discipline is hand-wired into our own code.
-What about tools we didn't write?
+comes up empty on SSNs.
 
 ### 4 · Securing an off-the-shelf MCP server
 
@@ -75,9 +68,9 @@ In practice you'll adopt MCP servers you didn't build and can't add guardrails
 to. Here the agent is an MCP host (for example Claude Desktop) and the tool layer
 is the official [Redis MCP server][redis-mcp]. 1Password secures *its* credential:
 the Redis connection is an `op://` reference resolved by `op run` at spawn time
-(no secret in the config), and it's the same least-privilege credential from step
-3. The host has the full generic Redis toolbelt and still can't read one SSN or
-change one record. **When you can't control the tool, control the credential.**
+(no secret in the config), and it's the same least-privilege credential from step 3.
+The host has the full generic Redis toolbelt and still can't read one SSN or
+change one record.
 
 ## Getting started
 
@@ -92,13 +85,6 @@ git checkout env-vars-as-source-truth
 
 Step 1 needs only **Docker**. Steps 2 through 4 add the **[1Password CLI][op-cli]**
 and a 1Password account (service accounts require a Business or Teams plan).
-
-## What this repo is not
-
-A production template. It's a focused illustration of one idea: keeping secrets
-out of an agent's reach. It leans on 1Password because that's the tooling I reach
-for, but the principles (just-in-time resolution, least privilege, enforcing
-limits at the data layer) hold whatever secrets manager you use.
 
 [Ollama]: https://ollama.com
 [redis-mcp]: https://github.com/redis/mcp-redis
