@@ -25,19 +25,20 @@ is handled:
 UI  →  REST API  →  Agent (LLM + tools)  →  Redis
 ```
 
-Each branch will improve different security aspects with little code changes to the application: the security moves
-into the vault and the ACL, not into the app. The `.env` goes from holding
+Each branch will improve security with small code changes to the application: the security moves
+into the vault, usage of ACL, and data model changes. The `.env` goes from holding
 literals to holding `op://` references, and that's most of it. Safer without
 slowing the developer down is the whole point.
 
-You will notice that the data model evolves along with the security. Early branches store everything
-in one `customer:NNNN` record, PII included, mirroring how teams actually start;
-branch 3 splits PII into its own key so a scoped identity can be denied it.
+You will notice that the data model evolves along with the new security enhancements. Early branches
+store everything in one `customer:NNNN` record, PII included, mirroring how teams actually start;
+branch 3 splits PII into its own key so a scoped identity can be denied it. This approach is used
+to demonstrate why security should not be a deployment concern, but rather a development concern.
 
-The app runs locally with Docker and a local model via [Ollama], so the core
-walkthrough has no external LLM costs and nothing leaves your machine.
+The app runs locally with Docker and uses [Ollama] as LLM running locally, so the core  walkthrough
+has no external LLM costs and nothing leaves your machine.
 
-## The path
+## Learning path
 
 | # | Branch | What it covers |
 |---|--------|----------------|
