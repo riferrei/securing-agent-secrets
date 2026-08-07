@@ -8,17 +8,37 @@ services:
     command:
       - sh
       - -c
-      - exec redis-server --save "" --requirepass "$$(cat /run/secrets/redis_prod_password)"
+      - exec redis-server --save "" --user default on ">$$(cat /run/secrets/redis_admin_password)" "~*" "+@all" --user agent on ">$$(cat /run/secrets/redis_agent_password)" "~customer:*" "+@read" "+@connection"
     secrets:
-      - redis_prod_password
+      - redis_admin_password
+      - redis_agent_password
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_prod_password)\" ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_admin_password)\" ping | grep PONG"]
       interval: 10s
       retries: 5
       start_period: 5s
       timeout: 5s
+
+  # One-shot: loads the demo data as the admin user. The agent's scoped ACL user
+  # is read-only, so seeding runs under the broader operator identity.
+  seed:
+    container_name: agent-seed
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    entrypoint: ["/seed"]
+    environment:
+      OP_SERVICE_ACCOUNT_TOKEN: ${OP_SERVICE_ACCOUNT_TOKEN}
+      REDIS_HOST: "op://Agent Prod/redis-prod/host"
+      REDIS_PORT: "op://Agent Prod/redis-prod/port"
+      REDIS_USER: "op://Agent Prod/redis-prod/username"
+      REDIS_PASSWORD: "op://Agent Prod/redis-prod/password"
+    restart: "no"
+    depends_on:
+      redis-prod:
+        condition: service_healthy
 
   # Pulls the model on startup (cached in the volume), then serves. The
   # healthcheck passes only once the model is present, so the backend waits for
@@ -61,6 +81,8 @@ services:
     depends_on:
       redis-prod:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
       ollama:
         condition: service_healthy
     healthcheck:
@@ -88,8 +110,10 @@ services:
       start_period: 10s
 
 secrets:
-  redis_prod_password:
-    environment: REDIS_PROD_PASSWORD
+  redis_admin_password:
+    environment: REDIS_ADMIN_PASSWORD
+  redis_agent_password:
+    environment: REDIS_AGENT_PASSWORD
 
 volumes:
   ollama-data:

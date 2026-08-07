@@ -19,7 +19,6 @@ import (
 	"github.com/riferrei/securing-agent-secrets/internal/httpapi"
 	"github.com/riferrei/securing-agent-secrets/internal/llm"
 	"github.com/riferrei/securing-agent-secrets/internal/redisstore"
-	"github.com/riferrei/securing-agent-secrets/internal/seed"
 	"github.com/riferrei/securing-agent-secrets/internal/vault"
 )
 
@@ -52,14 +51,6 @@ func main() {
 		log.Fatalf("redis: %v", err)
 	}
 	defer store.Close()
-
-	if ok, _ := store.Exists(ctx, "0001"); !ok {
-		if err := seed.Apply(ctx, store); err != nil {
-			log.Printf("server: auto-seed failed: %v", err)
-		} else {
-			log.Printf("server: auto-seeded demo data")
-		}
-	}
 
 	llmClient := llm.New(cfg.OllamaBaseURL)
 	ag := agent.New(llmClient, store, cfg.OllamaModel, cfg.MaxToolIterations)

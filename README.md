@@ -1,67 +1,57 @@
-# A vault as the source of truth
+# Controlling the blast radius
 
-> Resolving the credential just in time from 1Password, never on disk and never in the model's context.
+> A read-only, PII-blind identity: even a hijacked agent can't read SSNs or write.
 
 Part of **[What Your Agent Doesn't Know Can't Hurt You][series]**, a hands-on
 series on keeping secrets out of an AI agent's reach.
 
 ---
 
-Same app as the [previous step][prev], with one thing changed: the Redis
-connection is gone from `.env` and out of the repo. It lives in a 1Password vault
-now, and the app resolves it just in time at startup through the 1Password SDK,
-authenticated as a service account. Nothing sensitive touches disk or version
-control.
+The earlier steps secured the *secret*. The agent's *reach* was untouched: it
+connected with full access, so it could read every field of every customer, PII
+included, and a prompt injection could talk it into doing exactly that. This step
+shrinks the blast radius so that even a fully hijacked agent can do little harm.
 
-`cat .env` tells the story. In the previous step these were literals, the
-password among them in plaintext. Here every one is a *reference*, and the whole
-connection, host and port included, is the vault's to hand out:
+The customer record splits into two keys: `customer:*` (business fields) and
+`pii:*` (email, phone, SSN, address), and the agent is issued a **least-privilege
+Redis credential**: an ACL user scoped to `~customer:* +@read`. It cannot read
+`pii:*` and cannot write anything. **Redis refuses, not the agent.** Talk it into
+enumerating everyone and it still comes up empty on SSNs; ask it to change a
+record and the write is denied.
 
-```ini
-REDIS_HOST=op://Agent Prod/redis-prod/host
-REDIS_PORT=op://Agent Prod/redis-prod/port
-REDIS_USER=op://Agent Prod/redis-prod/username
-REDIS_PASSWORD=op://Agent Prod/redis-prod/password
-```
-
-The only secret in play is the service account token; it lives in your shell as
-`OP_SERVICE_ACCOUNT_TOKEN` and is never written anywhere.
+1Password's part: it holds *both* the admin credential and the read-only agent
+credential, and the app is only ever handed the read-only one. Least privilege is
+what's in the vault, not a promise in the code.
 
 ## How it works
 
 ![Architecture](docs/architecture.png)
 
-At startup the app asks 1Password for the connection, builds the Redis client,
-and never logs or returns the resolved value.
+The agent can't write and can't see PII, so it can't seed itself. Seeding is a
+separate one-shot that resolves the *admin* credential and loads the data. Same
+service account, two different Redis identities.
 
 ## Prerequisites
 
 - **Docker**
-- The **[1Password CLI][op-cli]** (`op`)
-- A **1Password account** on a plan with service accounts (Business or Teams)
+- The **[1Password CLI][op-cli]** (`op`) and a 1Password account with service
+  accounts (Business or Teams)
 
 ## 1Password setup
 
-The repo references secrets by path, so set up a matching vault and item:
+One vault (`Agent Prod`) with **two Server items**: the admin identity that seeds,
+and the read-only identity the agent runs as.
 
-1. A **vault**. This walkthrough uses one named `Agent Prod`.
-2. A **Server item** in it named `redis-prod`, with these fields:
+| Item | `host` | `port` | `username` | `password` |
+|------|------------|--------|------------|------------|
+| `redis-prod` | `redis-prod` | `6379` | `default` | admin password |
+| `redis-agent` | `redis-prod` | `6379` | `agent` | any password you choose |
 
-   | Field | Value |
-   |-------|-------|
-   | `host` | `redis-prod` |
-   | `port` | `6379` |
-   | `username` | `default` |
-   | `password` | any password you choose |
+Plus a **service account** with read access to the vault, its token exported:
 
-3. A **service account** with read access to that vault. Export its token:
-
-   ```bash
-   export OP_SERVICE_ACCOUNT_TOKEN=ops_...
-   ```
-
-Named your vault or item differently? Update the `op://` paths in `.env` and
-`op.env` to match.
+```bash
+export OP_SERVICE_ACCOUNT_TOKEN=ops_...
+```
 
 ## Run it
 
@@ -69,47 +59,58 @@ Named your vault or item differently? Update the `op://` paths in `.env` and
 op run --env-file=op.env -- docker compose up --build -d
 ```
 
-`op.env` holds a *reference*, not a secret. `op run` resolves it in memory and
-hands the value to Redis as its password, never writing it to disk. The service
-account token passes through to the app, which resolves the same connection
-through the SDK. The app seeds the sample customers on first start; open
-**http://localhost:8080**. Stop with `docker compose down`.
+`op run` resolves both passwords into the Redis ACL. The seed one-shot loads the
+data as admin, then the app starts as the read-only `agent` user. Open
+**http://localhost:8080**; stop with `docker compose down`.
 
-## Prove the secret is gone
+## See the blast radius hold
+
+Ask the agent a business question (*"What tier is customer 3, and what's their
+balance?"*) and it answers fine. Ask for an SSN, or to change a record, and it
+can't.
+
+Prove it at the database. The PII is there, and the **admin** identity can read
+it:
 
 ```bash
-cat .env                        # only op:// references
-git grep -i 'redis.*password'   # nothing sensitive is tracked
+docker compose exec redis-prod redis-cli --no-auth-warning \
+  -a "$(op read 'op://Agent Prod/redis-prod/password')" HGETALL pii:0001
 ```
 
-A secret scanner finds nothing to flag, and that's *deterministic*, not a matter
-of discipline.
+The **agent** identity cannot. Reads of PII and any write are refused:
 
-## When it leaks anyway
+```bash
+pw="$(op read 'op://Agent Prod/redis-agent/password')"
+docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL customer:0001  # ok
+docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL pii:0001        # NOPERM
+docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HSET customer:0001 x y  # NOPERM
+```
 
-The point of a vault isn't only that the secret is hidden; it's that the secret
-is *disposable*. The service account token that authenticates all of this is
-short-lived and centrally controlled. In the 1Password console it carries an
-expiry, and two buttons: **Rotate Token** issues a new one and invalidates the
-old, and **Revoke Token** kills access outright. Neither touches this repo or a
-redeploy: the app resolves whatever the vault hands it at the next startup.
+The limit is enforced by the database, not by the model choosing to behave.
 
-That is the difference from the previous step. There, a leaked credential meant
-rewriting git history and rotating the database password by hand, with no way to
-revoke the exposure in the meantime. Here, a suspected leak is a single click,
-and rotation on a schedule is the default rather than an emergency.
+## If something does leak
+
+Scoping bounds what a leaked credential *can* do; the vault bounds how long it
+can do it. Everything here, the admin password, the agent password, and the
+service account token that resolves them, is held in 1Password and disposable.
+**Rotate** the service account token to cut over to a fresh one, or **revoke** it
+to kill all access at once, both the seeding identity and the agent's, from a
+single control point and with no code change or redeploy. Rotating either Redis
+password in the vault flows through on the next start the same way. A suspected
+compromise is a click, not a scramble.
 
 ## What this doesn't solve
 
-The app's *access* is unchanged. It still connects to Redis with full reach: it
-can read every field of every customer, PII included. Moving the secret into a
-vault does nothing about an over-broad identity. The next step scopes it.
+The scoping lives in *this app's* code and Redis wiring. Point an agent at an
+off-the-shelf MCP server (a tool you didn't write and can't add guardrails to),
+and none of that discipline comes along for free. The next step brings 1Password
+to exactly that case.
 
 ---
 
-**← Previous: [Environment variables as the source of truth][prev] · Next: [Controlling the blast radius][next] →**
+**← Previous: [A vault as the source of truth][prev] · Next: [Securing MCP servers][next] →**
 
 [series]: https://github.com/riferrei/securing-agent-secrets
-[prev]: https://github.com/riferrei/securing-agent-secrets/tree/env-vars-as-source-truth
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[prev]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
+[next]: https://github.com/riferrei/securing-agent-secrets/tree/securing-mcp-servers
 [op-cli]: https://developer.1password.com/docs/cli/

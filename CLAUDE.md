@@ -8,35 +8,37 @@ constraints, not preferences.
 
 A small Go assistant for a customer support team. It answers business questions
 about customers (tier, balance, account status, region), using a local model
-(via Ollama) to interpret intent. Here every field, business
-and PII (email, phone, SSN, address) alike, sits in one `customer:*` hash: the
-naive baseline. Read and write both flow through the one Redis connection, so the
-agent's reach is broad, which is the blast radius a later branch scopes down. The
-`controlling-blast-radius` branch refactors the entity into two hashes so a scoped
-identity can be denied the PII. The secret being protected across the project is
-the Redis connection credential.
+(via Ollama) to interpret intent. The customer entity is
+split across two hashes: `customer:*` (business fields) and `pii:*` (email,
+phone, SSN, address). The secret being protected across the project is the Redis
+connection credential.
 
-This is the `vaults-as-source-truth` branch. The connection no longer lives in
-`.env`; its address, user, and password are resolved just in time from a
-1Password vault via the Go SDK, authed by a service account. Nothing sensitive
-touches disk or version control. The agent's access is still broad, which the
-next branch scopes down.
+This is the `controlling-blast-radius` branch. The secret already lives in
+1Password (the previous branch); now the agent's reach is scoped. It is issued a
+least-privilege Redis credential — a read-only ACL user restricted to
+`~customer:*`, so it cannot read `pii:*` or write anything. 1Password holds both
+the admin and the agent credential; the app is only ever handed the agent one.
+Seeding, which needs writes, runs separately as a one-shot under the admin
+credential.
 
 ## Architecture
 
 ```
-UI (nginx)  ->  REST API (Go, :8000)  ->  Agent (Go)  ->  redis-prod
+UI (nginx)  ->  REST API (Go, :8000)  ->  Agent (Go)  ->  redis-prod (as ACL user "agent")
                                              |
+                                             +--> 1Password (agent credential, read-only)
                                              +--> Ollama (local LLM)
 ```
 
-The agent is naively wired to `redis-prod` (the production database) with full
-access. A later branch scopes it to a read-only, PII-blind Redis identity.
+The agent connects to `redis-prod` as the read-only `agent` ACL user
+(`~customer:* +@read`). A one-shot `seed` service loads the data as the admin
+user; the agent user cannot write. Both credentials live in one vault; the app
+is only ever handed the read-only one.
 
 - `frontend/` static UI served by nginx, which proxies `/api/` to the backend.
 - `internal/httpapi` REST surface: `/api/health`, `/api/ready`, `/api/chat`.
 - `internal/agent` the model-and-tools reasoning loop.
-- `internal/redisstore` typed access to customers, stored as a single `customer:*` hash (business fields and PII together).
+- `internal/redisstore` typed access to customers, split across `customer:*` (business) and `pii:*` keys.
 - `internal/llm` minimal Ollama chat client with tool calling.
 - `internal/config` loads configuration and the `op://` connection references.
 - `internal/vault` resolves secrets from 1Password via the service account.
@@ -59,6 +61,10 @@ access. A later branch scopes it to a read-only, PII-blind Redis identity.
    never written down.
 5. **Resolve, use, discard.** The credential is resolved from 1Password at
    startup, used to build the Redis client, and never written anywhere else.
+6. **The agent's identity stays scoped.** The backend connects as the read-only
+   `agent` ACL user (`~customer:* +@read`). Do not widen it to the admin user or
+   give the backend the admin credential. Seeding, which needs write access, runs
+   as a separate one-shot under the admin credential.
 
 ## The series
 
@@ -68,21 +74,22 @@ Keep the diff between consecutive branches small: the diff is the story.
 
 ## Run commands
 
-Export a 1Password service account token, then:
+Export the service account token, then:
 
 ```bash
 export OP_SERVICE_ACCOUNT_TOKEN=ops_...
-op run --env-file=op.env -- docker compose up --build -d   # resolves the credential, starts the stack
+op run --env-file=op.env -- docker compose up --build -d   # provisions the ACL, seeds, starts the stack
 # UI at http://localhost:8080
 
-docker compose exec redis-prod redis-cli --no-auth-warning -a "$(op read 'op://Agent Prod/redis-prod/password')" HGETALL customer:0001
+docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$(op read 'op://Agent Prod/redis-agent/password')" HGETALL pii:0001   # NOPERM: agent denied PII
 docker compose down
 ```
 
 Prerequisites: Docker, and a 1Password Business account with a service account
-scoped to read `op://Agent Prod/redis-prod/password`. Ollama and the model run
-as compose services. On Apple Silicon the containerized Ollama is CPU-only; see
-the README for host Ollama.
+that reads the `Agent Prod` vault. That vault holds two Server items: `redis-prod`
+(username `default`, admin password) and `redis-agent` (username `agent`, the
+read-only credential). Ollama and the model run as compose services. On Apple
+Silicon the containerized Ollama is CPU-only; see the README for host Ollama.
 
 Conversations have short-term memory: the server keeps per-session history so
 follow-up questions resolve against earlier turns.

@@ -20,10 +20,13 @@ type Customer struct {
 	AccountStatus string `json:"account_status"`
 	Balance       string `json:"balance"`
 	Region        string `json:"region"`
-	Email         string `json:"email"`
-	PhoneNumber   string `json:"phone_number"`
-	SSN           string `json:"ssn"`
-	Address       string `json:"address"`
+}
+
+type PII struct {
+	Email       string `json:"email"`
+	PhoneNumber string `json:"phone_number"`
+	SSN         string `json:"ssn"`
+	Address     string `json:"address"`
 }
 
 type Store struct {
@@ -47,6 +50,9 @@ func (s *Store) Close() error { return s.rdb.Close() }
 // Key zero-pads a customer id to four digits: "1" -> "customer:0001".
 func Key(id string) string { return "customer:" + NormalizeID(id) }
 
+// PIIKey is the sibling key holding the sensitive fields the agent's ACL denies.
+func PIIKey(id string) string { return "pii:" + NormalizeID(id) }
+
 func (s *Store) SetCustomer(ctx context.Context, id string, c Customer) error {
 	return s.rdb.HSet(ctx, Key(id), map[string]any{
 		"firstname":      c.Firstname,
@@ -56,10 +62,15 @@ func (s *Store) SetCustomer(ctx context.Context, id string, c Customer) error {
 		"account_status": c.AccountStatus,
 		"balance":        c.Balance,
 		"region":         c.Region,
-		"email":          c.Email,
-		"phone_number":   c.PhoneNumber,
-		"ssn":            c.SSN,
-		"address":        c.Address,
+	}).Err()
+}
+
+func (s *Store) SetPII(ctx context.Context, id string, p PII) error {
+	return s.rdb.HSet(ctx, PIIKey(id), map[string]any{
+		"email":        p.Email,
+		"phone_number": p.PhoneNumber,
+		"ssn":          p.SSN,
+		"address":      p.Address,
 	}).Err()
 }
 
@@ -79,10 +90,6 @@ func (s *Store) GetCustomer(ctx context.Context, id string) (*Customer, error) {
 		AccountStatus: h["account_status"],
 		Balance:       h["balance"],
 		Region:        h["region"],
-		Email:         h["email"],
-		PhoneNumber:   h["phone_number"],
-		SSN:           h["ssn"],
-		Address:       h["address"],
 	}, nil
 }
 
