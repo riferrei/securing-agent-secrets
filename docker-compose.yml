@@ -1,20 +1,20 @@
 services:
 
-  redis-prod:
-    container_name: redis-prod
-    hostname: redis-prod
-    image: redis:8.8.0
-    user: redis
+  valkey-prod:
+    container_name: valkey-prod
+    hostname: valkey-prod
+    image: valkey/valkey:9.1.1
+    user: valkey
     command:
       - sh
       - -c
-      - exec redis-server --save "" --requirepass "$$(cat /run/secrets/redis_prod_password)"
+      - exec valkey-server --save "" --requirepass "$$(cat /run/secrets/valkey_prod_password)"
     secrets:
-      - redis_prod_password
+      - valkey_prod_password
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_prod_password)\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning -a \"$$(cat /run/secrets/valkey_prod_password)\" ping | grep PONG"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -59,7 +59,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      redis-prod:
+      valkey-prod:
         condition: service_healthy
       ollama:
         condition: service_healthy
@@ -88,8 +88,8 @@ services:
       start_period: 10s
 
 secrets:
-  redis_prod_password:
-    environment: REDIS_PROD_PASSWORD
+  valkey_prod_password:
+    environment: VALKEY_PROD_PASSWORD
 
 volumes:
   ollama-data:

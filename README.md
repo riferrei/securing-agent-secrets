@@ -7,7 +7,7 @@ series on keeping secrets out of an AI agent's reach.
 
 ---
 
-Same app as the [previous step][prev], with one thing changed: the Redis
+Same app as the [previous step][prev], with one thing changed: the Valkey
 connection is gone from `.env` and out of the repo. It lives in a 1Password vault
 now, and the app resolves it just in time at startup through the 1Password SDK,
 authenticated as a service account. Nothing sensitive touches disk or version
@@ -18,10 +18,10 @@ password among them in plaintext. Here every one is a *reference*, and the whole
 connection, host and port included, is the vault's to hand out:
 
 ```ini
-REDIS_HOST=op://Agent Prod/redis-prod/host
-REDIS_PORT=op://Agent Prod/redis-prod/port
-REDIS_USER=op://Agent Prod/redis-prod/username
-REDIS_PASSWORD=op://Agent Prod/redis-prod/password
+VALKEY_HOST=op://Agent Prod/valkey-prod/host
+VALKEY_PORT=op://Agent Prod/valkey-prod/port
+VALKEY_USER=op://Agent Prod/valkey-prod/username
+VALKEY_PASSWORD=op://Agent Prod/valkey-prod/password
 ```
 
 The only secret in play is the service account token; it lives in your shell as
@@ -31,7 +31,7 @@ The only secret in play is the service account token; it lives in your shell as
 
 ![Architecture](docs/architecture.png)
 
-At startup the app asks 1Password for the connection, builds the Redis client,
+At startup the app asks 1Password for the connection, builds the Valkey client,
 and never logs or returns the resolved value.
 
 ## Prerequisites
@@ -45,11 +45,11 @@ and never logs or returns the resolved value.
 The repo references secrets by path, so set up a matching vault and item:
 
 1. A **vault**. This walkthrough uses one named `Agent Prod`.
-2. A **Server item** in it named `redis-prod`, with these fields:
+2. A **Server item** in it named `valkey-prod`, with these fields:
 
    | Field | Value |
    |-------|-------|
-   | `host` | `redis-prod` |
+   | `host` | `valkey-prod` |
    | `port` | `6379` |
    | `username` | `default` |
    | `password` | any password you choose |
@@ -70,7 +70,7 @@ op run --env-file=op.env -- docker compose up --build -d
 ```
 
 `op.env` holds a *reference*, not a secret. `op run` resolves it in memory and
-hands the value to Redis as its password, never writing it to disk. The service
+hands the value to Valkey as its password, never writing it to disk. The service
 account token passes through to the app, which resolves the same connection
 through the SDK. The app seeds the sample customers on first start; open
 **http://localhost:8080**. Stop with `docker compose down`.
@@ -79,7 +79,7 @@ through the SDK. The app seeds the sample customers on first start; open
 
 ```bash
 cat .env                        # only op:// references
-git grep -i 'redis.*password'   # nothing sensitive is tracked
+git grep -i 'valkey.*password'  # nothing sensitive is tracked
 ```
 
 A secret scanner finds nothing to flag, and that's *deterministic*, not a matter
@@ -101,7 +101,7 @@ and rotation on a schedule is the default rather than an emergency.
 
 ## What this doesn't solve
 
-The app's *access* is unchanged. It still connects to Redis with full reach: it
+The app's *access* is unchanged. It still connects to Valkey with full reach: it
 can read every field of every customer, PII included. Moving the secret into a
 vault does nothing about an over-broad identity. The next step scopes it.
 
