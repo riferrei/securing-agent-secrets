@@ -109,7 +109,7 @@ vault does nothing about an over-broad identity. The next step scopes it.
 
 **← Previous: [Environment variables as the source of truth][prev] · Next: [Controlling the blast radius][next] →**
 
-[series]: https://github.com/riferrei/securing-agent-secrets
-[prev]: https://github.com/riferrei/securing-agent-secrets/tree/env-vars-as-source-truth
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[series]: https://github.com/riferrei/securing-agent-secrets-1password
+[prev]: https://github.com/riferrei/securing-agent-secrets-1password/tree/env-vars-as-source-truth
+[next]: https://github.com/riferrei/securing-agent-secrets-1password/tree/controlling-blast-radius
 [op-cli]: https://developer.1password.com/docs/cli/

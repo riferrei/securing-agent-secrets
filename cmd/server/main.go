@@ -14,13 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/riferrei/securing-agent-secrets/internal/agent"
-	"github.com/riferrei/securing-agent-secrets/internal/config"
-	"github.com/riferrei/securing-agent-secrets/internal/httpapi"
-	"github.com/riferrei/securing-agent-secrets/internal/llm"
-	"github.com/riferrei/securing-agent-secrets/internal/redisstore"
-	"github.com/riferrei/securing-agent-secrets/internal/seed"
-	"github.com/riferrei/securing-agent-secrets/internal/vault"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/agent"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/config"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/httpapi"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/seed"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/vault"
 )
 
 func main() {
