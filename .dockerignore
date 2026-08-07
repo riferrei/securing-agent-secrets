@@ -1,6 +1,0 @@
-.git
-.idea
-.env
-data
-frontend/node_modules
-*.md

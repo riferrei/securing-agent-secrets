@@ -1,116 +1,136 @@
-# Controlling the blast radius
+# Securing MCP servers
 
-> A read-only, PII-blind identity: even a hijacked agent can't read SSNs or write.
+> Pointing an off-the-shelf MCP server at the same data, with 1Password securing *its* credential.
 
 Part of **[What Your Agent Doesn't Know Can't Hurt You][series]**, a hands-on
 series on keeping secrets out of an AI agent's reach.
 
 ---
 
-The earlier steps secured the *secret*. The agent's *reach* was untouched: it
-connected with full access, so it could read every field of every customer, PII
-included, and a prompt injection could talk it into doing exactly that. This step
-shrinks the blast radius so that even a fully hijacked agent can do little harm.
+The earlier steps hardened an agent *we* wrote: we owned the Redis call, split
+the PII, scoped the credential. In practice you'll reach for **off-the-shelf MCP
+servers** you didn't write, and you can't bolt your guardrails onto someone else's
+server. What you *can* do is keep its secret out of plaintext and hand it only a
+least-privilege credential. That's this step.
 
-The customer record splits into two keys: `customer:*` (business fields) and
-`pii:*` (email, phone, SSN, address), and the agent is issued a **least-privilege
-Redis credential**: an ACL user scoped to `~customer:* +@read`. It cannot read
-`pii:*` and cannot write anything. **Redis refuses, not the agent.** Talk it into
-enumerating everyone and it still comes up empty on SSNs; ask it to change a
-record and the write is denied.
-
-1Password's part: it holds *both* the admin credential and the read-only agent
-credential, and the app is only ever handed the read-only one. Least privilege is
-what's in the vault, not a promise in the code.
-
-## How it works
+Unlike the others, this one has **no app of its own**. The agent is an MCP host
+([Claude Desktop] here), and the tool layer is the official
+[Redis MCP server][redis-mcp]. The database is the same Redis from
+[the previous step][prev], reached with the same read-only, PII-blind `agent`
+credential.
 
 ![Architecture](docs/architecture.png)
 
-The agent can't write and can't see PII, so it can't seed itself. Seeding is a
-separate one-shot that resolves the *admin* credential and loads the data. Same
-service account, two different Redis identities.
+## What you need
 
-## Prerequisites
+1. **The Redis from [the previous step][prev]**, running. It provides the ACL and
+   the seeded data. Check that branch out and bring it up (only Redis is
+   required).
+2. **A `redis-mcp` Server item** in the same `Agent Prod` vault. Everywhere else
+   the client runs *inside* Compose and reaches Redis as `redis-prod`; here the
+   MCP server runs on your host, spawned by Claude Desktop, so it reaches the same
+   Redis over the published port. This item carries that host-side address, the
+   *same* read-only `agent` credential as before:
 
-- **Docker**
-- The **[1Password CLI][op-cli]** (`op`) and a 1Password account with service
-  accounts (Business or Teams)
+   | Field | Value |
+   |-------|-------|
+   | `host` | `127.0.0.1` |
+   | `port` | `6379` |
+   | `username` | `agent` |
+   | `password` | the same agent password from the previous step |
+3. **The [1Password desktop app][op-desktop]** with CLI integration enabled
+   (*Settings > Developer > Integrate with 1Password CLI*). This lets `op run`
+   authenticate by biometric, so **no token lives in the config**.
+4. **The Redis MCP server**, pinned to a compatible SDK (see [the gotcha](#the-gotcha)):
+   ```bash
+   uv tool install --with "mcp<2" redis-mcp-server
+   ```
 
-## 1Password setup
+## The config (note what's *not* in it)
 
-One vault (`Agent Prod`) with **two Server items**: the admin identity that seeds,
-and the read-only identity the agent runs as.
+Add this to `~/Library/Application Support/Claude/claude_desktop_config.json`
+(also saved in [`mcp/claude_desktop_config.json`](mcp/claude_desktop_config.json)):
 
-| Item | `host` | `port` | `username` | `password` |
-|------|------------|--------|------------|------------|
-| `redis-prod` | `redis-prod` | `6379` | `default` | admin password |
-| `redis-agent` | `redis-prod` | `6379` | `agent` | any password you choose |
-
-Plus a **service account** with read access to the vault, its token exported:
-
-```bash
-export OP_SERVICE_ACCOUNT_TOKEN=ops_...
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "/opt/homebrew/bin/op",
+      "args": ["run", "--", "/Users/riferrei/.local/bin/redis-mcp-server"],
+      "env": {
+        "REDIS_HOST": "op://Agent Prod/redis-mcp/host",
+        "REDIS_PORT": "op://Agent Prod/redis-mcp/port",
+        "REDIS_USERNAME": "op://Agent Prod/redis-mcp/username",
+        "REDIS_PWD": "op://Agent Prod/redis-mcp/password"
+      }
+    }
+  }
+}
 ```
 
-## Run it
+The command isn't the MCP server; it's `op run --`, which resolves the `op://`
+references in memory and hands the real values to the server it spawns. The
+config holds **only references, no connection details** — not just the password,
+but the host and port too, matching how every earlier branch keeps the whole
+Redis connection in the vault. The paths are absolute because Claude Desktop
+doesn't inherit your shell `PATH`; set yours with `command -v op` and your `uv`
+tools bin (typically `~/.local/bin/redis-mcp-server`).
 
-```bash
-op run --env-file=op.env -- docker compose up --build -d
+Restart Claude Desktop and confirm the `redis` server shows **running** under
+*Settings > Developer*.
+
+## The gotcha
+
+`redis-mcp-server` 0.5.0 imports `mcp.server.fastmcp`, which the `mcp` SDK
+**removed in 2.0**. A plain `uv tool install` pulls `mcp` 2.0 and the server
+crashes on startup:
+
+```
+ModuleNotFoundError: No module named 'mcp.server.fastmcp'
 ```
 
-`op run` resolves both passwords into the Redis ACL. The seed one-shot loads the
-data as admin, then the app starts as the read-only `agent` user. Open
-**http://localhost:8080**; stop with `docker compose down`.
+The `--with "mcp<2"` pin above avoids it.
 
-## See the blast radius hold
+## See it work
 
-Ask the agent a business question (*"What tier is customer 3, and what's their
-balance?"*) and it answers fine. Ask for an SSN, or to change a record, and it
-can't.
+Talk to Claude; it picks the Redis MCP tools itself:
 
-Prove it at the database. The PII is there, and the **admin** identity can read
-it:
+| You say | What happens |
+| --- | --- |
+| "Look up customer 1." | Business record returned ✅ |
+| "What's their SSN?" | **Denied**: *No permissions to access a key* 🛑 |
+| "Change their first name to HACKED." | **Denied**: *has no permissions to run the 'hset' command* 🛑 |
 
-```bash
-docker compose exec redis-prod redis-cli --no-auth-warning \
-  -a "$(op read 'op://Agent Prod/redis-prod/password')" HGETALL pii:0001
-```
+Even the denial masks the resolved credential (*User `<concealed by 1Password>`
+has no permissions…*): `op run` scrubbing secrets out of the tool's own output.
 
-The **agent** identity cannot. Reads of PII and any write are refused:
+## The point
 
-```bash
-pw="$(op read 'op://Agent Prod/redis-agent/password')"
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL customer:0001  # ok
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL pii:0001        # NOPERM
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HSET customer:0001 x y  # NOPERM
-```
+Claude here has the **full, generic Redis toolbelt** (`hget`, `hset`, `delete`,
+`scan`) on a server you didn't write and can't add guardrails to. It could ask
+for anything. It still can't read one SSN or change one record, because the only
+credential it was ever handed is the least-privilege, read-only one 1Password
+injected just in time, never in plaintext.
 
-The limit is enforced by the database, not by the model choosing to behave.
+And because that credential lives in the vault rather than the tool's config, it
+stays disposable even here. If it leaks, you **rotate or revoke** it in 1Password
+and the next `op run` picks up the change; the third-party server you can't edit
+keeps working, now with a credential the old copy can no longer use. Control of
+the secret never left the boundary 1Password owns.
 
-## If something does leak
-
-Scoping bounds what a leaked credential *can* do; the vault bounds how long it
-can do it. Everything here, the admin password, the agent password, and the
-service account token that resolves them, is held in 1Password and disposable.
-**Rotate** the service account token to cut over to a fresh one, or **revoke** it
-to kill all access at once, both the seeding identity and the agent's, from a
-single control point and with no code change or redeploy. Rotating either Redis
-password in the vault flows through on the next start the same way. A suspected
-compromise is a click, not a scramble.
+**When you can't control the tool, control the credential.**
 
 ## What this doesn't solve
 
-The scoping lives in *this app's* code and Redis wiring. Point an agent at an
-off-the-shelf MCP server (a tool you didn't write and can't add guardrails to),
-and none of that discipline comes along for free. The next step brings 1Password
-to exactly that case.
+The agent trusts whatever MCP server it points at, and the secret didn't vanish;
+it relocated to a boundary 1Password owns. Security is never finished.
 
 ---
 
-**← Previous: [A vault as the source of truth][prev] · Next: [Securing MCP servers][next] →**
+**← Previous: [Controlling the blast radius][prev] · [Series overview][series]**
 
 [series]: https://github.com/riferrei/securing-agent-secrets
-[prev]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/securing-mcp-servers
-[op-cli]: https://developer.1password.com/docs/cli/
+[prev]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[Claude Desktop]: https://claude.ai/download
+[redis-mcp]: https://github.com/redis/mcp-redis
+[op-desktop]: https://1password.com/downloads
