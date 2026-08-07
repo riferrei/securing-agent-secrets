@@ -129,8 +129,8 @@ it relocated to a boundary 1Password owns. Security is never finished.
 
 **← Previous: [Controlling the blast radius][prev] · [Series overview][series]**
 
-[series]: https://github.com/riferrei/securing-agent-secrets
-[prev]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[series]: https://github.com/riferrei/securing-agent-secrets-1password
+[prev]: https://github.com/riferrei/securing-agent-secrets-1password/tree/controlling-blast-radius
 [Claude Desktop]: https://claude.ai/download
 [redis-mcp]: https://github.com/redis/mcp-redis
 [op-desktop]: https://1password.com/downloads
