@@ -21,9 +21,7 @@ looks them up in Redis and answers. The secret it depends on is the Redis
 connection. The architecture never changes across branches, only how the secret
 is handled:
 
-```
-UI  →  REST API  →  Agent (LLM + tools)  →  Redis
-```
+![Architecture](docs/architecture.png)
 
 Each branch will improve security with small code changes to the application: the security moves
 into the vault, usage of ACL, and data model changes. The `.env` goes from holding
