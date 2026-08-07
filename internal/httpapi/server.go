@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/riferrei/securing-agent-secrets/internal/agent"
-	"github.com/riferrei/securing-agent-secrets/internal/llm"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/agent"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
 )
 
 const maxHistory = 40

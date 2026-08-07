@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/riferrei/securing-agent-secrets/internal/config"
-	"github.com/riferrei/securing-agent-secrets/internal/redisstore"
-	"github.com/riferrei/securing-agent-secrets/internal/seed"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/config"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/seed"
 )
 
 func main() {

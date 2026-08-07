@@ -107,6 +107,6 @@ from 1Password.
 
 **Next → [A vault as the source of truth][next]**
 
-[series]: https://github.com/riferrei/securing-agent-secrets
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
-[b3]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[series]: https://github.com/riferrei/securing-agent-secrets-1password
+[next]: https://github.com/riferrei/securing-agent-secrets-1password/tree/vaults-as-source-truth
+[b3]: https://github.com/riferrei/securing-agent-secrets-1password/tree/controlling-blast-radius

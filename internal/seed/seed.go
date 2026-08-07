@@ -4,7 +4,7 @@ package seed
 import (
 	"context"
 
-	"github.com/riferrei/securing-agent-secrets/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
 )
 
 // Customers is the demo dataset, keyed by unpadded id.

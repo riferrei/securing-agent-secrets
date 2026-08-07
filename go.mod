@@ -1,4 +1,4 @@
-module github.com/riferrei/securing-agent-secrets
+module github.com/riferrei/securing-agent-secrets-1password
 
 go 1.26
 
