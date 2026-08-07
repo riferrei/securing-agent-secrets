@@ -17,7 +17,7 @@ reasoning, or check one out and run it yourself.
 ## The example app
 
 A customer-support assistant. Ask it about a customer in natural language; it
-looks them up in Redis and answers. The secret it depends on is the Redis
+looks them up in Valkey and answers. The secret it depends on is the Valkey
 connection. The architecture never changes across branches, only how the secret
 is handled:
 
@@ -51,7 +51,7 @@ progression reads as intentional rather than as drift. Here's the through-line.
 
 ### 1 · The credential in an environment variable
 
-The Redis credential lives in a `.env` file. This isn't a strawman; it's what
+The Valkey credential lives in a `.env` file. This isn't a strawman; it's what
 most teams actually ship: the value is in an env var, `.env` is git-ignored, and
 everything works. It feels safe. It isn't: the credential is plaintext on disk,
 one stray `git add .` from landing in history, where a leaked secret is
@@ -68,16 +68,17 @@ only for the instant it's used.
 
 Shrink what the agent can *do*. The customer record splits into two keys,
 business fields and PII (email, phone, SSN, address), and the agent connects as a
-read-only Redis ACL user scoped to the business keys only. It cannot read PII and
-cannot write anything; Redis refuses, not the agent. Even a fully hijacked agent
+read-only Valkey ACL user scoped to the business keys only. It cannot read PII and
+cannot write anything; Valkey refuses, not the agent. Even a fully hijacked agent
 comes up empty on SSNs.
 
 ### 4 · Securing an off-the-shelf MCP server
 
 In practice you'll adopt MCP servers you didn't build and can't add guardrails
 to. Here the agent is an MCP host (for example Claude Desktop) and the tool layer
-is the official [Redis MCP server][redis-mcp]. 1Password secures *its* credential:
-the Redis connection is an `op://` reference resolved by `op run` at spawn time
+is the official [Redis MCP server][redis-mcp] (there's no Valkey-native one, and
+Valkey speaks the same protocol). 1Password secures *its* credential: the Valkey
+connection is an `op://` reference resolved by `op run` at spawn time
 (no secret in the config), and it's the same least-privilege credential from step 3.
 The host has the full generic Redis toolbelt and still can't read one SSN or
 change one record.
