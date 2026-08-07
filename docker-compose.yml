@@ -1,21 +1,21 @@
 services:
 
-  redis-prod:
-    container_name: redis-prod
-    hostname: redis-prod
-    image: redis:8.8.0
+  valkey-prod:
+    container_name: valkey-prod
+    hostname: valkey-prod
+    image: valkey/valkey:9.1.1
     command:
-      - redis-server
+      - valkey-server
       - --save
       - ""
       - --requirepass
-      - ${REDIS_PASSWORD}
+      - ${VALKEY_PASSWORD}
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a $$VALKEY_PASSWORD ping | grep PONG"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -58,7 +58,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      redis-prod:
+      valkey-prod:
         condition: service_healthy
       ollama:
         condition: service_healthy

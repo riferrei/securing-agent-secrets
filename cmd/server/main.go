@@ -18,8 +18,8 @@ import (
 	"github.com/riferrei/securing-agent-secrets-1password/internal/config"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/httpapi"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
-	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/seed"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/valkeystore"
 )
 
 func main() {
@@ -36,9 +36,9 @@ func main() {
 
 	ctx := context.Background()
 
-	store, err := redisstore.New(ctx, cfg.RedisURL())
+	store, err := valkeystore.New(ctx, cfg.ValkeyHost, cfg.ValkeyPort, cfg.ValkeyUser, cfg.ValkeyPassword)
 	if err != nil {
-		log.Fatalf("redis: %v", err)
+		log.Fatalf("valkey: %v", err)
 	}
 	defer store.Close()
 

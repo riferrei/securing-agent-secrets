@@ -1,13 +1,14 @@
-// Package redisstore provides typed access to customer records in Redis.
-package redisstore
+// Package valkeystore provides typed access to customer records in Valkey.
+package valkeystore
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/valkey-io/valkey-go"
 )
 
 var ErrNotFound = errors.New("customer not found")
@@ -27,44 +28,49 @@ type Customer struct {
 }
 
 type Store struct {
-	rdb *redis.Client
+	vk valkey.Client
 }
 
-func New(ctx context.Context, redisURL string) (*Store, error) {
-	opts, err := redis.ParseURL(redisURL)
+func New(ctx context.Context, host, port, user, password string) (*Store, error) {
+	vk, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress:  []string{net.JoinHostPort(host, port)},
+		Username:     user,
+		Password:     password,
+		DisableCache: true,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("parsing redis url: %w", err)
+		return nil, fmt.Errorf("connecting to valkey: %w", err)
 	}
-	rdb := redis.NewClient(opts)
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("connecting to redis: %w", err)
+	if err := vk.Do(ctx, vk.B().Ping().Build()).Error(); err != nil {
+		vk.Close()
+		return nil, fmt.Errorf("connecting to valkey: %w", err)
 	}
-	return &Store{rdb: rdb}, nil
+	return &Store{vk: vk}, nil
 }
 
-func (s *Store) Close() error { return s.rdb.Close() }
+func (s *Store) Close() error { s.vk.Close(); return nil }
 
 // Key zero-pads a customer id to four digits: "1" -> "customer:0001".
 func Key(id string) string { return "customer:" + NormalizeID(id) }
 
 func (s *Store) SetCustomer(ctx context.Context, id string, c Customer) error {
-	return s.rdb.HSet(ctx, Key(id), map[string]any{
-		"firstname":      c.Firstname,
-		"lastname":       c.Lastname,
-		"customer_type":  c.CustomerType,
-		"customer_since": c.CustomerSince,
-		"account_status": c.AccountStatus,
-		"balance":        c.Balance,
-		"region":         c.Region,
-		"email":          c.Email,
-		"phone_number":   c.PhoneNumber,
-		"ssn":            c.SSN,
-		"address":        c.Address,
-	}).Err()
+	return s.vk.Do(ctx, s.vk.B().Hset().Key(Key(id)).FieldValue().
+		FieldValue("firstname", c.Firstname).
+		FieldValue("lastname", c.Lastname).
+		FieldValue("customer_type", c.CustomerType).
+		FieldValue("customer_since", c.CustomerSince).
+		FieldValue("account_status", c.AccountStatus).
+		FieldValue("balance", c.Balance).
+		FieldValue("region", c.Region).
+		FieldValue("email", c.Email).
+		FieldValue("phone_number", c.PhoneNumber).
+		FieldValue("ssn", c.SSN).
+		FieldValue("address", c.Address).
+		Build()).Error()
 }
 
 func (s *Store) GetCustomer(ctx context.Context, id string) (*Customer, error) {
-	h, err := s.rdb.HGetAll(ctx, Key(id)).Result()
+	h, err := s.vk.Do(ctx, s.vk.B().Hgetall().Key(Key(id)).Build()).AsStrMap()
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +105,7 @@ func (s *Store) GetCustomerRaw(ctx context.Context, id string) (string, error) {
 }
 
 func (s *Store) Exists(ctx context.Context, id string) (bool, error) {
-	n, err := s.rdb.Exists(ctx, Key(id)).Result()
+	n, err := s.vk.Do(ctx, s.vk.B().Exists().Key(Key(id)).Build()).AsInt64()
 	if err != nil {
 		return false, err
 	}

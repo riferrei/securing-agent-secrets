@@ -2,8 +2,6 @@
 package config
 
 import (
-	"fmt"
-	"net"
 	"os"
 	"strconv"
 
@@ -11,10 +9,10 @@ import (
 )
 
 type Config struct {
-	RedisHost         string
-	RedisPort         string
-	RedisUser         string
-	RedisPassword     string
+	ValkeyHost        string
+	ValkeyPort        string
+	ValkeyUser        string
+	ValkeyPassword    string
 	OllamaBaseURL     string
 	OllamaModel       string
 	HTTPAddr          string
@@ -30,19 +28,15 @@ func Load() Config {
 	_ = godotenv.Load()
 
 	return Config{
-		RedisHost:         os.Getenv("REDIS_HOST"),
-		RedisPort:         os.Getenv("REDIS_PORT"),
-		RedisUser:         os.Getenv("REDIS_USER"),
-		RedisPassword:     os.Getenv("REDIS_PASSWORD"),
+		ValkeyHost:        os.Getenv("VALKEY_HOST"),
+		ValkeyPort:        os.Getenv("VALKEY_PORT"),
+		ValkeyUser:        os.Getenv("VALKEY_USER"),
+		ValkeyPassword:    os.Getenv("VALKEY_PASSWORD"),
 		OllamaBaseURL:     os.Getenv("OLLAMA_BASE_URL"),
 		OllamaModel:       os.Getenv("OLLAMA_MODEL"),
 		HTTPAddr:          os.Getenv("HTTP_ADDR"),
 		MaxToolIterations: getInt("MAX_TOOL_ITERATIONS", 12),
 	}
-}
-
-func (c Config) RedisURL() string {
-	return fmt.Sprintf("redis://%s:%s@%s", c.RedisUser, c.RedisPassword, net.JoinHostPort(c.RedisHost, c.RedisPort))
 }
 
 func getInt(key string, fallback int) int {

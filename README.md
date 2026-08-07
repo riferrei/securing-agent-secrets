@@ -9,7 +9,7 @@ series on keeping secrets out of an AI agent's reach.
 
 A small AI assistant for a customer-support team: ask it about a customer in
 natural language (tier, balance, account status, region) and it looks them up in
-Redis and answers. The secret it depends on is the Redis connection credential,
+Valkey and answers. The secret it depends on is the Valkey connection credential,
 and here that credential lives in a `.env` file.
 
 This isn't a strawman. It's the setup most teams actually ship: the value is in
@@ -22,7 +22,7 @@ is about fixing it.
 ![Architecture](docs/architecture.png)
 
 The model only interprets intent and picks a customer id; the Go code owns the
-actual Redis call. **The model never generates Redis commands**, a safety property
+actual Valkey call. **The model never generates Valkey commands**, a safety property
 worth keeping as the app hardens.
 
 ## Prerequisites
@@ -59,11 +59,11 @@ Stop it with `docker compose down`.
 ## Verify it end to end
 
 To confirm the agent reads real data rather than inventing it, read the same key
-straight from Redis and compare:
+straight from Valkey and compare:
 
 ```bash
-docker compose exec redis-prod redis-cli \
-  -a "$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2)" HGETALL customer:0001
+docker compose exec valkey-prod valkey-cli \
+  -a "$(grep -E '^VALKEY_PASSWORD=' .env | cut -d= -f2)" HGETALL customer:0001
 ```
 
 The agent's answer and the raw record should match.
@@ -80,7 +80,7 @@ denied it. Re-seeding is idempotent.
 
 ## Why this isn't safe
 
-The Redis credential is committed to this repository in plaintext. See for
+The Valkey credential is committed to this repository in plaintext. See for
 yourself:
 
 ```bash
@@ -89,7 +89,7 @@ git log --oneline -- .env     # tracked, not ignored, already in history
 ```
 
 Once a secret lands in git history it's effectively public, and rotation is the
-only real fix. But rotation here is manual and slow: change the Redis password,
+only real fix. But rotation here is manual and slow: change the Valkey password,
 rewrite it across every `.env` and deployment, purge it from git history, and
 redeploy. There is no button to revoke the exposed value in the meantime, and
 nothing to expire it on a schedule, so a leak stays live until someone does all

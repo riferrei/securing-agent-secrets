@@ -2,12 +2,8 @@ module github.com/riferrei/securing-agent-secrets-1password
 
 go 1.26
 
-require (
-	github.com/joho/godotenv v1.5.1
-	github.com/redis/go-redis/v9 v9.21.0
-)
+require github.com/joho/godotenv v1.5.1
 
-require (
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
-)
+require golang.org/x/sys v0.43.0 // indirect
+
+require github.com/valkey-io/valkey-go v1.0.76

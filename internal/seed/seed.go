@@ -1,14 +1,14 @@
-// Package seed holds the demo dataset and loads it into Redis.
+// Package seed holds the demo dataset and loads it into Valkey.
 package seed
 
 import (
 	"context"
 
-	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/valkeystore"
 )
 
 // Customers is the demo dataset, keyed by unpadded id.
-var Customers = map[string]redisstore.Customer{
+var Customers = map[string]valkeystore.Customer{
 	"1": {
 		Firstname: "Ricardo", Lastname: "Ferreira",
 		CustomerType: "Gold", CustomerSince: "2019-03-15", AccountStatus: "Active",
@@ -67,8 +67,8 @@ var Customers = map[string]redisstore.Customer{
 	},
 }
 
-// Apply writes every demo customer into Redis. It is idempotent.
-func Apply(ctx context.Context, store *redisstore.Store) error {
+// Apply writes every demo customer into Valkey. It is idempotent.
+func Apply(ctx context.Context, store *valkeystore.Store) error {
 	for id, c := range Customers {
 		if err := store.SetCustomer(ctx, id, c); err != nil {
 			return err
