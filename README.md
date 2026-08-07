@@ -1,112 +1,115 @@
-# Environment variables as the source of truth
+# A vault as the source of truth
 
-> The credential in a `.env` file: the setup that *feels* safe, and why it isn't.
+> Resolving the credential just in time from 1Password, never on disk and never in the model's context.
 
 Part of **[What Your Agent Doesn't Know Can't Hurt You][series]**, a hands-on
 series on keeping secrets out of an AI agent's reach.
 
 ---
 
-A small AI assistant for a customer-support team: ask it about a customer in
-natural language (tier, balance, account status, region) and it looks them up in
-Redis and answers. The secret it depends on is the Redis connection credential,
-and here that credential lives in a `.env` file.
+Same app as the [previous step][prev], with one thing changed: the Redis
+connection is gone from `.env` and out of the repo. It lives in a 1Password vault
+now, and the app resolves it just in time at startup through the 1Password SDK,
+authenticated as a service account. Nothing sensitive touches disk or version
+control.
 
-This isn't a strawman. It's the setup most teams actually ship: the value is in
-an environment variable, `.env` is git-ignored, and everything works. It feels
-safe. The point of this branch is to sit with *why it isn't*. Everything after it
-is about fixing it.
+`cat .env` tells the story. In the previous step these were literals, the
+password among them in plaintext. Here every one is a *reference*, and the whole
+connection, host and port included, is the vault's to hand out:
+
+```ini
+REDIS_HOST=op://Agent Prod/redis-prod/host
+REDIS_PORT=op://Agent Prod/redis-prod/port
+REDIS_USER=op://Agent Prod/redis-prod/username
+REDIS_PASSWORD=op://Agent Prod/redis-prod/password
+```
+
+The only secret in play is the service account token; it lives in your shell as
+`OP_SERVICE_ACCOUNT_TOKEN` and is never written anywhere.
 
 ## How it works
 
 ![Architecture](docs/architecture.png)
 
-The model only interprets intent and picks a customer id; the Go code owns the
-actual Redis call. **The model never generates Redis commands**, a safety property
-worth keeping as the app hardens.
+At startup the app asks 1Password for the connection, builds the Redis client,
+and never logs or returns the resolved value.
 
 ## Prerequisites
 
-- **Docker.** That's it. Ollama and the model run as containers, so nothing else
-  needs to be installed.
+- **Docker**
+- The **[1Password CLI][op-cli]** (`op`)
+- A **1Password account** on a plan with service accounts (Business or Teams)
+
+## 1Password setup
+
+The repo references secrets by path, so set up a matching vault and item:
+
+1. A **vault**. This walkthrough uses one named `Agent Prod`.
+2. A **Server item** in it named `redis-prod`, with these fields:
+
+   | Field | Value |
+   |-------|-------|
+   | `host` | `redis-prod` |
+   | `port` | `6379` |
+   | `username` | `default` |
+   | `password` | any password you choose |
+
+3. A **service account** with read access to that vault. Export its token:
+
+   ```bash
+   export OP_SERVICE_ACCOUNT_TOKEN=ops_...
+   ```
+
+Named your vault or item differently? Update the `op://` paths in `.env` and
+`op.env` to match.
 
 ## Run it
 
-The `.env` is committed here on purpose (see [Why this isn't safe](#why-this-isnt-safe)),
-so there's nothing to configure:
-
 ```bash
-docker compose up --build -d
+op run --env-file=op.env -- docker compose up --build -d
 ```
 
-The first run pulls the model into a volume (a few minutes, cached afterward) and
-seeds the sample customers. Open **http://localhost:8080** and try:
+`op.env` holds a *reference*, not a secret. `op run` resolves it in memory and
+hands the value to Redis as its password, never writing it to disk. The service
+account token passes through to the app, which resolves the same connection
+through the SDK. The app seeds the sample customers on first start; open
+**http://localhost:8080**. Stop with `docker compose down`.
 
-- *"What tier is customer 1, and what's their balance?"*
-- *"What's customer 2's account status?"*
-- *"Who is customer 3, and what region are they in?"*, then a follow-up like *"and their balance?"*
-
-Conversations have short-term memory, so follow-ups resolve against earlier turns.
-Stop it with `docker compose down`.
-
-> [!TIP]
-> On Apple Silicon the containerized Ollama is CPU-only (Docker can't reach the
-> Metal GPU). For a snappier experience, run Ollama on the host:
-> `brew install ollama && ollama pull qwen2.5:7b`, set
-> `OLLAMA_BASE_URL=http://host.docker.internal:11434` in `.env`, and comment out
-> the `ollama` service (and the backend's dependency on it) in `docker-compose.yml`.
-
-## Verify it end to end
-
-To confirm the agent reads real data rather than inventing it, read the same key
-straight from Redis and compare:
+## Prove the secret is gone
 
 ```bash
-docker compose exec redis-prod redis-cli \
-  -a "$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2)" HGETALL customer:0001
+cat .env                        # only op:// references
+git grep -i 'redis.*password'   # nothing sensitive is tracked
 ```
 
-The agent's answer and the raw record should match.
+A secret scanner finds nothing to flag, and that's *deterministic*, not a matter
+of discipline.
 
-## The data
+## When it leaks anyway
 
-Eight sample customers, each a single `customer:NNNN` hash holding **everything**
-side by side: business fields (name, tier, since, status, balance, region) *and*
-PII (email, phone, SSN, mailing address). That's the naive baseline: no thought
-given to separating sensitive data. The PII is synthetic, but an over-broad
-credential reaching it would be a privacy breach, not just an ops problem. A
-[later branch][b3] splits the PII into its own key so a scoped identity can be
-denied it. Re-seeding is idempotent.
+The point of a vault isn't only that the secret is hidden; it's that the secret
+is *disposable*. The service account token that authenticates all of this is
+short-lived and centrally controlled. In the 1Password console it carries an
+expiry, and two buttons: **Rotate Token** issues a new one and invalidates the
+old, and **Revoke Token** kills access outright. Neither touches this repo or a
+redeploy: the app resolves whatever the vault hands it at the next startup.
 
-## Why this isn't safe
-
-The Redis credential is committed to this repository in plaintext. See for
-yourself:
-
-```bash
-cat .env                      # readable by anyone with a copy of the repo
-git log --oneline -- .env     # tracked, not ignored, already in history
-```
-
-Once a secret lands in git history it's effectively public, and rotation is the
-only real fix. But rotation here is manual and slow: change the Redis password,
-rewrite it across every `.env` and deployment, purge it from git history, and
-redeploy. There is no button to revoke the exposed value in the meantime, and
-nothing to expire it on a schedule, so a leak stays live until someone does all
-of that by hand. There's no secret scanning either, no pre-commit guard, no
-second line of defense, and the app working perfectly is exactly what makes this
-comfortable to leave alone. The next step makes the credential disposable instead.
+That is the difference from the previous step. There, a leaked credential meant
+rewriting git history and rotating the database password by hand, with no way to
+revoke the exposure in the meantime. Here, a suspected leak is a single click,
+and rotation on a schedule is the default rather than an emergency.
 
 ## What this doesn't solve
 
-The credential sits on disk in plaintext, one stray `git add .` from being
-committed. The next step removes it from disk entirely, resolving it just in time
-from 1Password.
+The app's *access* is unchanged. It still connects to Redis with full reach: it
+can read every field of every customer, PII included. Moving the secret into a
+vault does nothing about an over-broad identity. The next step scopes it.
 
 ---
 
-**Next → [A vault as the source of truth][next]**
+**← Previous: [Environment variables as the source of truth][prev] · Next: [Controlling the blast radius][next] →**
 
 [series]: https://github.com/riferrei/securing-agent-secrets
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
-[b3]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[prev]: https://github.com/riferrei/securing-agent-secrets/tree/env-vars-as-source-truth
+[next]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
+[op-cli]: https://developer.1password.com/docs/cli/

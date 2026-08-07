@@ -4,18 +4,17 @@ services:
     container_name: redis-prod
     hostname: redis-prod
     image: redis:8.8.0
+    user: redis
     command:
-      - redis-server
-      - --save
-      - ""
-      - --requirepass
-      - ${REDIS_PASSWORD}
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      - sh
+      - -c
+      - exec redis-server --save "" --requirepass "$$(cat /run/secrets/redis_prod_password)"
+    secrets:
+      - redis_prod_password
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_prod_password)\" ping | grep PONG"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -53,6 +52,8 @@ services:
       dockerfile: Dockerfile.backend
     env_file:
       - .env
+    environment:
+      OP_SERVICE_ACCOUNT_TOKEN: ${OP_SERVICE_ACCOUNT_TOKEN}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -85,6 +86,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+secrets:
+  redis_prod_password:
+    environment: REDIS_PROD_PASSWORD
 
 volumes:
   ollama-data:

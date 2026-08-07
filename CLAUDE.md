@@ -16,11 +16,11 @@ agent's reach is broad, which is the blast radius a later branch scopes down. Th
 identity can be denied the PII. The secret being protected across the project is
 the Redis connection credential.
 
-This is the `env-vars-as-source-truth` branch. The credential lives in a `.env`
-file. It works, and that is the point: this is the setup developers believe is
-safe. The weakness is operational, not in the code. The plaintext credential sits
-on disk, one `.gitignore` slip from being committed. The next branch moves it
-into 1Password.
+This is the `vaults-as-source-truth` branch. The connection no longer lives in
+`.env`; its address, user, and password are resolved just in time from a
+1Password vault via the Go SDK, authed by a service account. Nothing sensitive
+touches disk or version control. The agent's access is still broad, which the
+next branch scopes down.
 
 ## Architecture
 
@@ -38,7 +38,8 @@ access. A later branch scopes it to a read-only, PII-blind Redis identity.
 - `internal/agent` the model-and-tools reasoning loop.
 - `internal/redisstore` typed access to customers, stored as a single `customer:*` hash (business fields and PII together).
 - `internal/llm` minimal Ollama chat client with tool calling.
-- `internal/config` loads configuration and the credential from the environment.
+- `internal/config` loads configuration and the `op://` connection references.
+- `internal/vault` resolves secrets from 1Password via the service account.
 - `cmd/server` and `cmd/seed` entrypoints.
 
 ## Security invariants (do not break)
@@ -52,12 +53,12 @@ access. A later branch scopes it to a read-only, PII-blind Redis identity.
 3. **Keep the credential out of the model's context.** Do not put the connection
    string in the system prompt, tool descriptions, or any message sent to the
    model. It is only used by the Go code to open the Redis connection.
-4. **No plaintext secret should ever be committed, except here, on purpose.**
-   This branch commits `.env` deliberately to make the risk concrete — the
-   anti-pattern the branch exists to show. From the next branch on, the credential
-   never touches disk or version control.
-5. **Resolve, use, discard.** The credential is read from the environment at
-   startup and used to build the Redis client. It is not written anywhere else.
+4. **No plaintext secret touches disk or version control.** The Redis credential
+   lives in 1Password; `.env` holds only an `op://` reference. The service
+   account token is provided at runtime via `OP_SERVICE_ACCOUNT_TOKEN` and is
+   never written down.
+5. **Resolve, use, discard.** The credential is resolved from 1Password at
+   startup, used to build the Redis client, and never written anywhere else.
 
 ## The series
 
@@ -67,19 +68,21 @@ Keep the diff between consecutive branches small: the diff is the story.
 
 ## Run commands
 
-The committed `.env` has everything needed, so there is nothing to configure.
+Export a 1Password service account token, then:
 
 ```bash
-docker compose up --build -d   # build and start Redis, Ollama, backend, frontend
-# UI at http://localhost:8080 (the backend seeds sample customers on startup)
+export OP_SERVICE_ACCOUNT_TOKEN=ops_...
+op run --env-file=op.env -- docker compose up --build -d   # resolves the credential, starts the stack
+# UI at http://localhost:8080
 
-docker compose exec redis-prod redis-cli -a "$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2)" HGETALL customer:0001
+docker compose exec redis-prod redis-cli --no-auth-warning -a "$(op read 'op://Agent Prod/redis-prod/password')" HGETALL customer:0001
 docker compose down
 ```
 
-Prerequisite: Docker. Ollama and the model run as compose services, so the
-stack is self-contained. On Apple Silicon the containerized Ollama is CPU-only;
-see the README for switching to host Ollama for GPU speed.
+Prerequisites: Docker, and a 1Password Business account with a service account
+scoped to read `op://Agent Prod/redis-prod/password`. Ollama and the model run
+as compose services. On Apple Silicon the containerized Ollama is CPU-only; see
+the README for host Ollama.
 
 Conversations have short-term memory: the server keeps per-session history so
 follow-up questions resolve against earlier turns.

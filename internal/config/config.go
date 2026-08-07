@@ -2,8 +2,6 @@
 package config
 
 import (
-	"fmt"
-	"net"
 	"os"
 	"strconv"
 
@@ -21,11 +19,11 @@ type Config struct {
 	MaxToolIterations int
 }
 
-// Load reads configuration from the environment (the committed .env on this
-// branch; later branches resolve it from 1Password). The connection values get
-// no fallback default so a missing one fails fast rather than hiding behind a
-// baked-in value. MAX_TOOL_ITERATIONS is a tuning knob, not a secret, so it
-// keeps a default.
+// Load reads configuration from the environment (a .env file first, if present).
+// The REDIS_* values are op:// references the vault package resolves from
+// 1Password; they get no fallback default so a missing one fails fast rather
+// than hiding behind a baked-in value. MAX_TOOL_ITERATIONS is a tuning knob, not
+// a secret, so it keeps a default.
 func Load() Config {
 	_ = godotenv.Load()
 
@@ -39,10 +37,6 @@ func Load() Config {
 		HTTPAddr:          os.Getenv("HTTP_ADDR"),
 		MaxToolIterations: getInt("MAX_TOOL_ITERATIONS", 12),
 	}
-}
-
-func (c Config) RedisURL() string {
-	return fmt.Sprintf("redis://%s:%s@%s", c.RedisUser, c.RedisPassword, net.JoinHostPort(c.RedisHost, c.RedisPort))
 }
 
 func getInt(key string, fallback int) int {
