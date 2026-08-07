@@ -88,8 +88,8 @@ Each branch has its own README with exact prerequisites and commands. Start at
 the beginning:
 
 ```bash
-git clone https://github.com/riferrei/securing-agent-secrets.git
-cd securing-agent-secrets
+git clone https://github.com/riferrei/securing-agent-secrets-1password.git
+cd securing-agent-secrets-1password
 git checkout env-vars-as-source-truth
 ```
 
@@ -100,7 +100,7 @@ with the product before committing with a credit card.
 [Ollama]: https://ollama.com
 [redis-mcp]: https://github.com/redis/mcp-redis
 [op-cli]: https://developer.1password.com/docs/cli/
-[b1]: https://github.com/riferrei/securing-agent-secrets/tree/env-vars-as-source-truth
-[b2]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
-[b3]: https://github.com/riferrei/securing-agent-secrets/tree/controlling-blast-radius
-[b4]: https://github.com/riferrei/securing-agent-secrets/tree/securing-mcp-servers
+[b1]: https://github.com/riferrei/securing-agent-secrets-1password/tree/env-vars-as-source-truth
+[b2]: https://github.com/riferrei/securing-agent-secrets-1password/tree/vaults-as-source-truth
+[b3]: https://github.com/riferrei/securing-agent-secrets-1password/tree/controlling-blast-radius
+[b4]: https://github.com/riferrei/securing-agent-secrets-1password/tree/securing-mcp-servers
