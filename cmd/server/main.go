@@ -18,7 +18,7 @@ import (
 	"github.com/riferrei/securing-agent-secrets-1password/internal/config"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/httpapi"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
-	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/valkeystore"
 	"github.com/riferrei/securing-agent-secrets-1password/internal/vault"
 )
 
@@ -40,15 +40,15 @@ func main() {
 	if token == "" {
 		log.Fatal("OP_SERVICE_ACCOUNT_TOKEN is required")
 	}
-	redisURL, err := vault.ResolveRedisURL(ctx, token, cfg.RedisHost, cfg.RedisPort, cfg.RedisUser, cfg.RedisPassword)
+	host, port, user, password, err := vault.ResolveValkey(ctx, token, cfg.ValkeyHost, cfg.ValkeyPort, cfg.ValkeyUser, cfg.ValkeyPassword)
 	if err != nil {
 		log.Fatalf("1password: %v", err)
 	}
-	log.Printf("server: resolved Redis connection from 1Password")
+	log.Printf("server: resolved Valkey connection from 1Password")
 
-	store, err := redisstore.New(ctx, redisURL)
+	store, err := valkeystore.New(ctx, host, port, user, password)
 	if err != nil {
-		log.Fatalf("redis: %v", err)
+		log.Fatalf("valkey: %v", err)
 	}
 	defer store.Close()
 

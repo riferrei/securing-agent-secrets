@@ -9,10 +9,10 @@ import (
 )
 
 type Config struct {
-	RedisHost         string
-	RedisPort         string
-	RedisUser         string
-	RedisPassword     string
+	ValkeyHost        string
+	ValkeyPort        string
+	ValkeyUser        string
+	ValkeyPassword    string
 	OllamaBaseURL     string
 	OllamaModel       string
 	HTTPAddr          string
@@ -20,7 +20,7 @@ type Config struct {
 }
 
 // Load reads configuration from the environment (a .env file first, if present).
-// The REDIS_* values are op:// references the vault package resolves from
+// The VALKEY_* values are op:// references the vault package resolves from
 // 1Password; they get no fallback default so a missing one fails fast rather
 // than hiding behind a baked-in value. MAX_TOOL_ITERATIONS is a tuning knob, not
 // a secret, so it keeps a default.
@@ -28,10 +28,10 @@ func Load() Config {
 	_ = godotenv.Load()
 
 	return Config{
-		RedisHost:         os.Getenv("REDIS_HOST"),
-		RedisPort:         os.Getenv("REDIS_PORT"),
-		RedisUser:         os.Getenv("REDIS_USER"),
-		RedisPassword:     os.Getenv("REDIS_PASSWORD"),
+		ValkeyHost:        os.Getenv("VALKEY_HOST"),
+		ValkeyPort:        os.Getenv("VALKEY_PORT"),
+		ValkeyUser:        os.Getenv("VALKEY_USER"),
+		ValkeyPassword:    os.Getenv("VALKEY_PASSWORD"),
 		OllamaBaseURL:     os.Getenv("OLLAMA_BASE_URL"),
 		OllamaModel:       os.Getenv("OLLAMA_MODEL"),
 		HTTPAddr:          os.Getenv("HTTP_ADDR"),

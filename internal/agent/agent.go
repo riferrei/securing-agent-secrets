@@ -1,5 +1,5 @@
 // Package agent runs the reasoning loop: the model picks a customer id, the Go
-// code owns the Redis call.
+// code owns the Valkey call.
 package agent
 
 import (
@@ -8,25 +8,25 @@ import (
 	"log"
 
 	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
-	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/valkeystore"
 )
 
 type TurnResult struct {
 	UserMessage      string
 	AssistantMessage string
 	ToolUsed         string
-	RedisCommand     string
-	RedisResult      string
+	ValkeyCommand    string
+	ValkeyResult     string
 }
 
 type Agent struct {
 	llm      *llm.Client
-	store    *redisstore.Store
+	store    *valkeystore.Store
 	model    string
 	maxIters int
 }
 
-func New(client *llm.Client, store *redisstore.Store, model string, maxIters int) *Agent {
+func New(client *llm.Client, store *valkeystore.Store, model string, maxIters int) *Agent {
 	if maxIters <= 0 {
 		maxIters = 5
 	}
@@ -120,16 +120,16 @@ func (a *Agent) runGetCustomer(ctx context.Context, args map[string]any, res *Tu
 	}
 
 	res.ToolUsed = "get_customer"
-	res.RedisCommand = "HGETALL " + redisstore.Key(rawID)
-	log.Printf("agent: tool call get_customer(%q) -> %s", rawID, res.RedisCommand)
+	res.ValkeyCommand = "HGETALL " + valkeystore.Key(rawID)
+	log.Printf("agent: tool call get_customer(%q) -> %s", rawID, res.ValkeyCommand)
 
 	raw, err := a.store.GetCustomerRaw(ctx, rawID)
 	if err != nil {
 		msg := `{"error":"customer not found"}`
-		res.RedisResult = msg
+		res.ValkeyResult = msg
 		return msg
 	}
-	res.RedisResult = raw
+	res.ValkeyResult = raw
 	return raw
 }
 

@@ -14,8 +14,8 @@ shrinks the blast radius so that even a fully hijacked agent can do little harm.
 
 The customer record splits into two keys: `customer:*` (business fields) and
 `pii:*` (email, phone, SSN, address), and the agent is issued a **least-privilege
-Redis credential**: an ACL user scoped to `~customer:* +@read`. It cannot read
-`pii:*` and cannot write anything. **Redis refuses, not the agent.** Talk it into
+Valkey credential**: an ACL user scoped to `~customer:* +@read`. It cannot read
+`pii:*` and cannot write anything. **Valkey refuses, not the agent.** Talk it into
 enumerating everyone and it still comes up empty on SSNs; ask it to change a
 record and the write is denied.
 
@@ -29,7 +29,7 @@ what's in the vault, not a promise in the code.
 
 The agent can't write and can't see PII, so it can't seed itself. Seeding is a
 separate one-shot that resolves the *admin* credential and loads the data. Same
-service account, two different Redis identities.
+service account, two different Valkey identities.
 
 ## Prerequisites
 
@@ -44,8 +44,8 @@ and the read-only identity the agent runs as.
 
 | Item | `host` | `port` | `username` | `password` |
 |------|------------|--------|------------|------------|
-| `redis-prod` | `redis-prod` | `6379` | `default` | admin password |
-| `redis-agent` | `redis-prod` | `6379` | `agent` | any password you choose |
+| `valkey-prod` | `valkey-prod` | `6379` | `default` | admin password |
+| `valkey-agent` | `valkey-prod` | `6379` | `agent` | any password you choose |
 
 Plus a **service account** with read access to the vault, its token exported:
 
@@ -59,7 +59,7 @@ export OP_SERVICE_ACCOUNT_TOKEN=ops_...
 op run --env-file=op.env -- docker compose up --build -d
 ```
 
-`op run` resolves both passwords into the Redis ACL. The seed one-shot loads the
+`op run` resolves both passwords into the Valkey ACL. The seed one-shot loads the
 data as admin, then the app starts as the read-only `agent` user. Open
 **http://localhost:8080**; stop with `docker compose down`.
 
@@ -73,17 +73,17 @@ Prove it at the database. The PII is there, and the **admin** identity can read
 it:
 
 ```bash
-docker compose exec redis-prod redis-cli --no-auth-warning \
-  -a "$(op read 'op://Agent Prod/redis-prod/password')" HGETALL pii:0001
+docker compose exec valkey-prod valkey-cli --no-auth-warning \
+  -a "$(op read 'op://Agent Prod/valkey-prod/password')" HGETALL pii:0001
 ```
 
 The **agent** identity cannot. Reads of PII and any write are refused:
 
 ```bash
-pw="$(op read 'op://Agent Prod/redis-agent/password')"
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL customer:0001  # ok
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HGETALL pii:0001        # NOPERM
-docker compose exec redis-prod redis-cli --no-auth-warning --user agent -a "$pw" HSET customer:0001 x y  # NOPERM
+pw="$(op read 'op://Agent Prod/valkey-agent/password')"
+docker compose exec valkey-prod valkey-cli --no-auth-warning --user agent -a "$pw" HGETALL customer:0001  # ok
+docker compose exec valkey-prod valkey-cli --no-auth-warning --user agent -a "$pw" HGETALL pii:0001        # NOPERM
+docker compose exec valkey-prod valkey-cli --no-auth-warning --user agent -a "$pw" HSET customer:0001 x y  # NOPERM
 ```
 
 The limit is enforced by the database, not by the model choosing to behave.
@@ -95,13 +95,13 @@ can do it. Everything here, the admin password, the agent password, and the
 service account token that resolves them, is held in 1Password and disposable.
 **Rotate** the service account token to cut over to a fresh one, or **revoke** it
 to kill all access at once, both the seeding identity and the agent's, from a
-single control point and with no code change or redeploy. Rotating either Redis
+single control point and with no code change or redeploy. Rotating either Valkey
 password in the vault flows through on the next start the same way. A suspected
 compromise is a click, not a scramble.
 
 ## What this doesn't solve
 
-The scoping lives in *this app's* code and Redis wiring. Point an agent at an
+The scoping lives in *this app's* code and Valkey wiring. Point an agent at an
 off-the-shelf MCP server (a tool you didn't write and can't add guardrails to),
 and none of that discipline comes along for free. The next step brings 1Password
 to exactly that case.

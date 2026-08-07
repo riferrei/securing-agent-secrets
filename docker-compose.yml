@@ -1,21 +1,21 @@
 services:
 
-  redis-prod:
-    container_name: redis-prod
-    hostname: redis-prod
-    image: redis:8.8.0
-    user: redis
+  valkey-prod:
+    container_name: valkey-prod
+    hostname: valkey-prod
+    image: valkey/valkey:9.1.1
+    user: valkey
     command:
       - sh
       - -c
-      - exec redis-server --save "" --user default on ">$$(cat /run/secrets/redis_admin_password)" "~*" "+@all" --user agent on ">$$(cat /run/secrets/redis_agent_password)" "~customer:*" "+@read" "+@connection"
+      - exec valkey-server --save "" --user default on ">$$(cat /run/secrets/valkey_admin_password)" "~*" "+@all" --user agent on ">$$(cat /run/secrets/valkey_agent_password)" "~customer:*" "+@read" "+@connection"
     secrets:
-      - redis_admin_password
-      - redis_agent_password
+      - valkey_admin_password
+      - valkey_agent_password
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_admin_password)\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning -a \"$$(cat /run/secrets/valkey_admin_password)\" ping | grep PONG"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -31,13 +31,13 @@ services:
     entrypoint: ["/seed"]
     environment:
       OP_SERVICE_ACCOUNT_TOKEN: ${OP_SERVICE_ACCOUNT_TOKEN}
-      REDIS_HOST: "op://Agent Prod/redis-prod/host"
-      REDIS_PORT: "op://Agent Prod/redis-prod/port"
-      REDIS_USER: "op://Agent Prod/redis-prod/username"
-      REDIS_PASSWORD: "op://Agent Prod/redis-prod/password"
+      VALKEY_HOST: "op://Agent Prod/valkey-prod/host"
+      VALKEY_PORT: "op://Agent Prod/valkey-prod/port"
+      VALKEY_USER: "op://Agent Prod/valkey-prod/username"
+      VALKEY_PASSWORD: "op://Agent Prod/valkey-prod/password"
     restart: "no"
     depends_on:
-      redis-prod:
+      valkey-prod:
         condition: service_healthy
 
   # Pulls the model on startup (cached in the volume), then serves. The
@@ -79,7 +79,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      redis-prod:
+      valkey-prod:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
@@ -110,10 +110,10 @@ services:
       start_period: 10s
 
 secrets:
-  redis_admin_password:
-    environment: REDIS_ADMIN_PASSWORD
-  redis_agent_password:
-    environment: REDIS_AGENT_PASSWORD
+  valkey_admin_password:
+    environment: VALKEY_ADMIN_PASSWORD
+  valkey_agent_password:
+    environment: VALKEY_AGENT_PASSWORD
 
 volumes:
   ollama-data:
