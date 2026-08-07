@@ -7,7 +7,7 @@ series on keeping secrets out of an AI agent's reach.
 
 ---
 
-The earlier steps hardened an agent *we* wrote: we owned the Redis call, split
+The earlier steps hardened an agent *we* wrote: we owned the Valkey call, split
 the PII, scoped the credential. In practice you'll reach for **off-the-shelf MCP
 servers** you didn't write, and you can't bolt your guardrails onto someone else's
 server. What you *can* do is keep its secret out of plaintext and hand it only a
@@ -15,21 +15,22 @@ least-privilege credential. That's this step.
 
 Unlike the others, this one has **no app of its own**. The agent is an MCP host
 ([Claude Desktop] here), and the tool layer is the official
-[Redis MCP server][redis-mcp]. The database is the same Redis from
-[the previous step][prev], reached with the same read-only, PII-blind `agent`
-credential.
+[Redis MCP server][redis-mcp] — there's no Valkey-native one yet, and it doesn't
+matter: Valkey speaks the same protocol, so the generic Redis toolbelt drives it
+unchanged. The database is the same Valkey from [the previous step][prev], reached
+with the same read-only, PII-blind `agent` credential.
 
 ![Architecture](docs/architecture.png)
 
 ## What you need
 
-1. **The Redis from [the previous step][prev]**, running. It provides the ACL and
-   the seeded data. Check that branch out and bring it up (only Redis is
+1. **The Valkey from [the previous step][prev]**, running. It provides the ACL and
+   the seeded data. Check that branch out and bring it up (only Valkey is
    required).
-2. **A `redis-mcp` Server item** in the same `Agent Prod` vault. Everywhere else
-   the client runs *inside* Compose and reaches Redis as `redis-prod`; here the
+2. **A `valkey-mcp` Server item** in the same `Agent Prod` vault. Everywhere else
+   the client runs *inside* Compose and reaches Valkey as `valkey-prod`; here the
    MCP server runs on your host, spawned by Claude Desktop, so it reaches the same
-   Redis over the published port. This item carries that host-side address, the
+   Valkey over the published port. This item carries that host-side address, the
    *same* read-only `agent` credential as before:
 
    | Field | Value |
@@ -58,10 +59,10 @@ Add this to `~/Library/Application Support/Claude/claude_desktop_config.json`
       "command": "/opt/homebrew/bin/op",
       "args": ["run", "--", "/Users/riferrei/.local/bin/redis-mcp-server"],
       "env": {
-        "REDIS_HOST": "op://Agent Prod/redis-mcp/host",
-        "REDIS_PORT": "op://Agent Prod/redis-mcp/port",
-        "REDIS_USERNAME": "op://Agent Prod/redis-mcp/username",
-        "REDIS_PWD": "op://Agent Prod/redis-mcp/password"
+        "REDIS_HOST": "op://Agent Prod/valkey-mcp/host",
+        "REDIS_PORT": "op://Agent Prod/valkey-mcp/port",
+        "REDIS_USERNAME": "op://Agent Prod/valkey-mcp/username",
+        "REDIS_PWD": "op://Agent Prod/valkey-mcp/password"
       }
     }
   }
@@ -72,7 +73,7 @@ The command isn't the MCP server; it's `op run --`, which resolves the `op://`
 references in memory and hands the real values to the server it spawns. The
 config holds **only references, no connection details** — not just the password,
 but the host and port too, matching how every earlier branch keeps the whole
-Redis connection in the vault. The paths are absolute because Claude Desktop
+Valkey connection in the vault. The paths are absolute because Claude Desktop
 doesn't inherit your shell `PATH`; set yours with `command -v op` and your `uv`
 tools bin (typically `~/.local/bin/redis-mcp-server`).
 

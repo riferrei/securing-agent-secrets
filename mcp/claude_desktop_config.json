@@ -4,10 +4,10 @@
       "command": "/opt/homebrew/bin/op",
       "args": ["run", "--", "/Users/riferrei/.local/bin/redis-mcp-server"],
       "env": {
-        "REDIS_HOST": "op://Agent Prod/redis-mcp/host",
-        "REDIS_PORT": "op://Agent Prod/redis-mcp/port",
-        "REDIS_USERNAME": "op://Agent Prod/redis-mcp/username",
-        "REDIS_PWD": "op://Agent Prod/redis-mcp/password"
+        "REDIS_HOST": "op://Agent Prod/valkey-mcp/host",
+        "REDIS_PORT": "op://Agent Prod/valkey-mcp/port",
+        "REDIS_USERNAME": "op://Agent Prod/valkey-mcp/username",
+        "REDIS_PWD": "op://Agent Prod/valkey-mcp/password"
       }
     }
   }
