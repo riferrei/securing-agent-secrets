@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/riferrei/securing-agent-secrets/internal/llm"
-	"github.com/riferrei/securing-agent-secrets/internal/redisstore"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/llm"
+	"github.com/riferrei/securing-agent-secrets-1password/internal/redisstore"
 )
 
 type TurnResult struct {

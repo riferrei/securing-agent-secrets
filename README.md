@@ -110,7 +110,7 @@ to exactly that case.
 
 **← Previous: [A vault as the source of truth][prev] · Next: [Securing MCP servers][next] →**
 
-[series]: https://github.com/riferrei/securing-agent-secrets
-[prev]: https://github.com/riferrei/securing-agent-secrets/tree/vaults-as-source-truth
-[next]: https://github.com/riferrei/securing-agent-secrets/tree/securing-mcp-servers
+[series]: https://github.com/riferrei/securing-agent-secrets-1password
+[prev]: https://github.com/riferrei/securing-agent-secrets-1password/tree/vaults-as-source-truth
+[next]: https://github.com/riferrei/securing-agent-secrets-1password/tree/securing-mcp-servers
 [op-cli]: https://developer.1password.com/docs/cli/
